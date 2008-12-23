@@ -2,6 +2,8 @@
 # Copyright:: Copyright (c) 2005 Lucas Carlson
 # License::   LGPL
 
+# Updated:: 12-22-2008 by Mark Dickson (mailto:mark@sitesteaders.com)
+
 module Shipping
 	VERSION = "1.6.0"
 
@@ -24,6 +26,8 @@ module Shipping
 		attr_accessor :price, :discount_price, :eta, :time_in_transit
 
 		attr_accessor :ship_date, :dropoff_type, :pay_type, :currency_code, :image_type, :label_type
+    
+    attr_accessor :weight_each, :quantity, :max_weight, :max_quantity, :items
 
 		def initialize(options = {})
 			prefs = File.expand_path(options[:prefs] || "~/.shipping.yml")
@@ -58,7 +62,129 @@ module Shipping
 			Shipping::UPS.new prepare_vars
 		end
 		
-		
+    # Attempt to package items in multiple boxes efficiently
+    # This doesn't use the bin-packing algorithm, but instead attempts to mirror how people pack boxes
+    # -- since people will most likely be packing them.
+    # -- It attempts to pack like items whenever possible.
+    # @items: array of weights
+    # @weight_each: can be used instead of array of items
+    # @variation_threshold: how much variety you'll allow (default to 10% variation [e.g. 10 items, 10 each])
+    # @weight_threshold: the minimum weight a box must be to close (default .5, i.e. half full by weight)
+    # @quantity_threshold: the minimum full a box must be to close (default .5, i.e. half full by the number of items that will fit)
+    def boxes
+      # See if we're dealing with an array of items
+      if @items.length > 0
+        @items.each {|item| item[:total_weight] = item[:weight] * item[:quantity]} # get weight totals
+        props = @items.inject({:weights => [], :quantities => [], :total_weights => []}) {|h, item| h[:weights] << item[:weight];h[:quantities] << item[:quantity]; h[:total_weights] << item[:total_weight];h}
+        @quantity = props[:quantities].sum
+        total_weight = props[:total_weights].sum
+        
+        # check to see if these are all the same weight
+        if props[:weights].uniq.length == 1
+          itemized = false
+          @weight_each = props[:weights].uniq[0]
+        else
+          itemized = true
+        end
+      else
+        @required = ['quantity', 'weight_each']
+        total_weight = @quantity.to_f * @weight_each
+        itemized = false
+      end
+  
+      max_weight = @max_weight || 150 # Fed Ex and UPS commercial max
+      max_quantity = @max_quantity || @quantity
+      variation_threshold = @variation_threshold || 0.1 # default to 10% variation (e.g. 10 items, 10 each)
+      weight_threshold = @weight_threshold || 0.5 # default to half full
+      quantity_threshold = @quantity_threshold || 0.5 #default to half full
+      box = Array.new
+      
+      # See if boxes should be divided by weight or number
+      bw = total_weight / max_weight
+      bq = @quantity.to_f / max_quantity
+      min_boxes = [bw.ceil, bq.ceil].max.to_i
+
+      # work with list of items
+      if itemized
+        leftovers = Array.new
+        variation = @items.length / @quantity.to_f # this shows us how much repetition there is
+
+        # First, we attempt to pack like items/weights
+        # we can skip this if variation is really high
+        if variation < variation_threshold
+          @items.each do |item|
+            while item[:quantity] > 0
+              max = (@max_weight / item[:weight]).truncate # how many of this weight can be packed in
+              this_num = [max, @max_quantity, item[:quantity]].min # should we pack by weight, number avail, or quantity
+              this_weight = this_num * item[:weight]
+              item[:quantity] -= this_num
+              
+              # if we haven't met the threshold
+              if (this_weight / @max_weight) <= weight_threshold and (this_num / @max_quantity) <= quantity_threshold
+                leftovers  << {:weight => this_weight, :quantity => this_num, :item => item[:id]}
+              else #otherwise, pack it
+                box << {:weight => this_weight, :quantity => this_num, :item => item[:id]}
+              end
+            end
+          end
+        else
+          leftovers = @items
+        end
+
+        # Then, we pack all the leftovers
+        leftover_box = {:weight => @max_weight, :quantity => @max_quantity}
+        this_box = {:weight => 0.0, :quantity => 0}       
+        leftovers.each do |item|
+          for i in 1..item[:quantity]
+            leftover_box[:weight] -= item[:weight]
+            leftover_box[:quantity] -= 1
+            if leftover_box[:weight] > 0 and leftover_box[:quantity] > 0
+              this_box[:weight] += item[:weight]
+              this_box[:quantity] += 1
+            elsif leftover_box[:weight] = 0 and leftover_box[:quantity] >= 0
+              this_box[:weight] += item[:weight]
+              this_box[:quantity] += 1
+              box << {:weight => this_box[:weight], :quantity => this_box[:quantity]}
+              leftover_box = {:weight => @max_weight, :quantity => @max_quantity}
+              this_box = {:weight => 0.0, :quantity => 0}
+            else
+              box << {:weight => this_box[:weight], :quantity => this_box[:quantity]}
+              leftover_box = {:weight => @max_weight, :quantity => @max_quantity}
+              this_box = {:weight => 0.0, :quantity => 0}
+            end
+          end
+        end
+        if this_box[:weight] > 0.0 and this_box[:quantity] > 0
+          box << {:weight => this_box[:weight], :quantity => this_box[:quantity]}
+        end
+                  
+        inefficiency = box.length / min_boxes
+
+      else # pack super efficiently
+        if bw > bq
+          box_weight = max_weight
+          box_quantity = max_weight / @weight_each
+        else
+          box_weight = max_quantity * @weight_each
+          box_quantity = max_quantity
+        end
+        
+        # fill the rest of the boxes
+        num_boxes = min_boxes - 1
+        (num_boxes).times do
+          box << {:weight => box_weight, :quantity => box_quantity}
+        end
+        
+        # if there is an uneven number for packaging
+        if @quantity % min_boxes != 0 or num_boxes == 0
+          excess_q = @quantity - (box_quantity * num_boxes)
+          excess_w = excess_q * @weight_each
+          box << {:weight => excess_w, :quantity => excess_q}
+        end
+        inefficiency = 0
+      end
+      return box
+    end
 
 		def self.state_from_zip(zip)
 			zip = zip.to_i
