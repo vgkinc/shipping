@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |s|
   s.name = %q{shipping}
-  s.version = "1.6.0"
+  s.version = "1.6.1"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Lucas Carlson", "Jimmy Baker", "Mark Dickson"]
@@ -37,6 +37,7 @@ Gem::Specification.new do |s|
      "lib/shipping/base.rb",
      "lib/shipping/fedex.rb",
      "lib/shipping/ups.rb",
+     "pkg/.gitignore",
      "shipping.gemspec",
      "test/base/base_test.rb",
      "test/fedex/fedex_test.rb",
