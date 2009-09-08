@@ -5,8 +5,6 @@
 # Updated:: 12-22-2008 by Mark Dickson (mailto:mark@sitesteaders.com)
 
 module Shipping
-	VERSION = "1.6.0"
-
 	class ShippingError < StandardError; end
 	class ShippingRequiredFieldError < StandardError; end
 
@@ -30,7 +28,7 @@ module Shipping
     attr_accessor :weight_each, :quantity, :max_weight, :max_quantity, :items
 
 		def initialize(options = {})
-			prefs = File.expand_path(options[:prefs] || "~/.shipping.yml")
+			prefs = File.expand_path(options[:prefs] || RAILS_ROOT + "/config/shipping.yml")
 			YAML.load(File.open(prefs)).each {|pref, value| eval("@#{pref} = #{value.inspect}")} if File.exists?(prefs)
 
 			@required = Array.new
