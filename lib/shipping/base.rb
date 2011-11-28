@@ -18,7 +18,7 @@ module Shipping
 		attr_writer :fedex_account, :fedex_meter, :fedex_url, :fedex_package_weight_limit_in_lbs
 
 		attr_accessor :name, :phone, :company, :email, :address, :address2, :address3, :city, :state, :zip, :country, :attention
-		attr_accessor :sender_name, :sender_phone, :sender_company, :sender_email, :sender_address1, :sender_address2, :sender_address3, :sender_city, :sender_state, :sender_zip, :sender_country, :sender_attention
+		attr_accessor :sender_name, :sender_phone, :sender_company, :sender_email, :sender_address, :sender_address2, :sender_address3, :sender_city, :sender_state, :sender_zip, :sender_country, :sender_attention
 
 		attr_accessor :weight, :weight_units, :insured_value, :declared_value, :transaction_type, :description
 		attr_accessor :measure_units, :measure_length, :measure_width, :measure_height
@@ -26,7 +26,7 @@ module Shipping
 		
 		attr_accessor :price, :discount_price, :eta, :time_in_transit
 
-		attr_accessor :ship_date, :dropoff_type, :pay_type, :currency_code, :image_type, :label_type
+		attr_accessor :ship_date, :dropoff_type, :pay_type, :currency_code, :image_type, :label_type, :reference_number
     
     attr_accessor :weight_each, :quantity, :max_weight, :max_quantity, :items
 
@@ -300,10 +300,11 @@ module Shipping
         if @debug == 'console'
           puts "[SHIPPING] Request:\n#{@data}"
           puts "[SHIPPING] Response:\n#{@response}"
-        elsif @debug == 'logger' and !@logger.blank?
+        elsif @debug == 'logger'
+          logger = Logger.new("#{Rails.root.to_s}/log/#{Rails.env}.log")
           request_id = Time.now.strftime "%FT%T"
-          @logger.info  "#{request_id} [SHIPPING] Request #{uri}\n\n#{@data}" 
-          @logger.info  "#{request_id} [SHIPPING] Response\n\n#{@response_plain}"
+          logger.info  "\n#{request_id} [SHIPPING] Request #{uri}\n#{@data}" 
+          logger.info  "\n#{request_id} [SHIPPING] Response\n#{@response_plain}"
         end
         
         def @response.plain; @response_plain; end

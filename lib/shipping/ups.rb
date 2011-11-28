@@ -440,6 +440,7 @@ module Shipping
       
       @packages ||= []
       if @packages.blank?
+        @single_package = true
         @packages << { :description => @package_description, 
           :type => @packaging_type, 
           :weight => { :weight => @weight, :units => @weight_units},
@@ -480,10 +481,9 @@ module Shipping
           b.Shipper { |b|
             b.ShipperNumber @ups_shipper_number
             b.Name @sender_name
-            b.CompanyName @sender_company[0,35]
-            b.AttentionName @sender_attention unless @attention.blank?
+            b.AttentionName @sender_attention unless @sender_attention.blank?
             b.Address { |b|
-              b.AddressLine1 @sender_address1 unless @sender_address1.blank?
+              b.AddressLine1 @sender_address unless @sender_address.blank?
               b.AddressLine2 @sender_address2 unless @sender_address2.blank?
               b.AddressLine3 @sender_address3 unless @sender_address3.blank?
               b.PostalCode @sender_zip
@@ -496,7 +496,7 @@ module Shipping
           b.ShipFrom { |b|
             b.CompanyName @sender_company[0,35]
             b.Address { |b|
-              b.AddressLine1 @sender_address1 unless @sender_address1.blank?
+              b.AddressLine1 @sender_address unless @sender_address.blank?
               b.AddressLine2 @sender_address2 unless @sender_address2.blank?
               b.AddressLine3 @sender_address3 unless @sender_address3.blank?
               b.PostalCode @sender_zip
@@ -509,9 +509,9 @@ module Shipping
             b.CompanyName @company
             b.PhoneNumber @phone
             b.Address { |b|              
-              b.AddressLine1 @sender_address1 unless @address1.blank?
-              b.AddressLine2 @sender_address2 unless @address2.blank?
-              b.AddressLine3 @sender_address3 unless @address3.blank?
+              b.AddressLine1 @address unless @address.blank?
+              b.AddressLine2 @address2 unless @address2.blank?
+              b.AddressLine3 @address3 unless @address3.blank?
               b.PostalCode @zip
               b.CountryCode @country unless @country.blank?
               b.City @city unless @city.blank?
@@ -578,6 +578,12 @@ module Shipping
                 b.Width  package[:measure][:width] || 0
                 b.Height  package[:measure][:height] || 0
               } if  package[:measure] && (package[:measure][:length] ||  package[:measure][:width] || package[:measure][:height])
+              unless @reference_number.blank?
+                b.ReferenceNumber {|b|
+                  b.Code '02'
+                  b.Value @reference_number
+                }
+              end
               b.PackageServiceOptions { |b|
                 b.InsuredValue { |b|
                   b.CurrencyCode package[:insurance][:currency] || 'US'
@@ -639,15 +645,24 @@ module Shipping
       
       begin  
         response = Hash.new       
-
-        response[:packages] = []
-        REXML::XPath.each(@response, "//ShipmentAcceptResponse/ShipmentResults/PackageResults") do |package_element|
-          response[:packages] << {}
-          response[:packages].last[:tracking_number] = REXML::XPath.first(package_element, "TrackingNumber").text
-          response[:packages].last[:encoded_label] = REXML::XPath.first(package_element, "LabelImage/GraphicImage").text
-          response[:packages].last[:label_file] = Tempfile.new("shipping_label_#{Time.now}_#{Time.now.usec}")
-          response[:packages].last[:label_file].write Base64.decode64( response[:packages].last[:encoded_label] )
-          response[:packages].last[:label_file].rewind
+        if @single_package
+          response[:tracking_number] = REXML::XPath.first(@response, "//ShipmentAcceptResponse/ShipmentResults/PackageResults/TrackingNumber").text
+          response[:encoded_image] = REXML::XPath.first(@response, "//ShipmentAcceptResponse/ShipmentResults/PackageResults/LabelImage/GraphicImage").text
+          extension = REXML::XPath.first(@response, "//ShipmentAcceptResponse/ShipmentResults/PackageResults/LabelImage/LabelImageFormat/Code").text
+          response[:image] = Tempfile.new(["shipping_label", '.' + extension.downcase])
+          response[:image].write Base64.decode64( response[:encoded_image] )
+          response[:image].rewind
+        else
+          response[:packages] = []
+          REXML::XPath.each(@response, "//ShipmentAcceptResponse/ShipmentResults/PackageResults") do |package_element|
+            response[:packages] << {}
+            response[:packages].last[:tracking_number] = REXML::XPath.first(package_element, "TrackingNumber").text
+            response[:packages].last[:encoded_label] = REXML::XPath.first(package_element, "LabelImage/GraphicImage").text
+            extension = response[:packages].last[:encoded_label] = REXML::XPath.first(package_element, "LabelImage/LabelImageFormat/Code").text
+            response[:packages].last[:label_file] = Tempfile.new(["shipping_label_#{Time.now}_#{Time.now.usec}", '.' + extension.downcase])
+            response[:packages].last[:label_file].write Base64.decode64( response[:packages].last[:encoded_label] )
+            response[:packages].last[:label_file].rewind
+          end
         end
       rescue
         raise ShippingError, get_error
