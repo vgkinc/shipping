@@ -14,7 +14,6 @@ module Shipping
     def price
       @required = [:zip, :country, :sender_zip, :weight]
       @required += [:ups_license_number, :ups_user, :ups_password]
-
       @insured_value ||= 0
       @country ||= 'US'
       @sender_country ||= 'US'
