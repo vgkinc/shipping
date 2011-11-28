@@ -6,9 +6,8 @@ Tracking is also supported through UPS XML API.
 
 == Download
 
-* gem install shipping
-* http://rubyforge.org/projects/shipping
-* svn co http://rufy.com/svn/shipping/trunk
+* gem 'shipping', :git => 'git://github.com/ideaoforder/shipping' (bundler)
+* https://github.com/ideaoforder/shipping
 
 === Usage
 There is going to be some data that will persist for all connections. For example, you will not want to repeat the fedex account number every time in your implementation code. To set default values, setup a file called .shipping.yml in the home directory of the user who will be using this library. An example file would be:
@@ -44,28 +43,32 @@ Alternately, you can instantiate the base class and then see both UPS and FedEx 
     ship.city = "Portland"
     ship.ups.valid_address? => true
 
-== LOGGING
+== DEBUGGING
 
-Debugging requests and responses from the webservices can be done by sending a logger to the Shipping object
+You can debug requests via the logger or the console. Just pass in 
+		
+		:debug => 'logger' 
+			OR
+		:debug => 'console'
 
-    Shipping::Base.new(:logger => logger)
 
-The only requirement is that logger object responses to the method "debug".
+== CONFIG
 
-== RAILS
+Shipping will look for a global Hash called SHIPPING_CONFIG. This is an easy way to set your UPS/USPS/FedEx account credentials, the debugger, and other defaults options.
 
-Automatically detection of RAILS_ROOT/config/shipping.yml has been removed as it includes an unnecesary dependency to Rails and now must be included in the creation of the instance
+If you're using rails, the easiest way to set this up is via a config file (config/shipping.yml) and an initializer--something like:
 
-    Shipping::Base.new(:prefs => (RAILS_ROOT + "/config/shipping.yml"))
-
-Logging in Rails is very easy, just initialize the Shipping object with the Rails.logger
-
-    Shipping::Base.new(:prefs => (RAILS_ROOT + "/config/shipping.yml"), :logger => Rails.logger)
+		SHIPPING_CONFIG = YAML.load_file(File.join(Rails.root, 'config', 'shipping.yml'))[Rails.env].symbolize_keys
+		
 
 == Authors    
 * Lucas Carlson  (mailto:lucas@rufy.com)
 * Jimmy Baker (mailto:jimmyebaker@gmail.com)
 * Noah Zoschke (mailto:noah@bitscribe.net)
+
+== Additional Contributors
+* Mark Dickson
+* David J. Brenes
 
 This library is released under the terms of the GNU LGPL.
 
