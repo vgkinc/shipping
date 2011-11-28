@@ -2,16 +2,17 @@
 # Copyright:: Copyright (c) 2005 Lucas Carlson
 # License::   LGPL
 
-# Updated:: 12-22-2008 by Mark Dickson (mailto:mark@sitesteaders.com)
+# Updated:: 11-28-2011 by Mark Dickson (mailto:mark@sitesteaders.com)
 
 module Shipping
-	VERSION = "1.6.0"
+	VERSION = "1.7.0"
 
 	class ShippingError < StandardError; end
 	class ShippingRequiredFieldError < StandardError; end
 
 	class Base
 		attr_reader :data, :response, :plain_response, :required, :services
+		attr_accessor :debug
 
 		attr_writer :ups_license_number, :ups_shipper_number, :ups_user, :ups_password, :ups_url, :ups_tool
 		attr_writer :fedex_account, :fedex_meter, :fedex_url, :fedex_package_weight_limit_in_lbs
@@ -30,8 +31,12 @@ module Shipping
     attr_accessor :weight_each, :quantity, :max_weight, :max_quantity, :items
 
 		def initialize(options = {})
-			prefs = File.expand_path(options[:prefs] || "~/.shipping.yml")
-			YAML.load(File.open(prefs)).each {|pref, value| eval("@#{pref} = #{value.inspect}")} if File.exists?(prefs)
+		  # Look for global SHIPPING_CONFIG
+		  # if it exists, then use whatever values have been set there
+		  if SHIPPING_CONFIG
+		    options[:prefs].nil? ? options[:prefs] = SHIPPING_CONFIG : options[:prefs].merge(SHIPPING_CONFIG)
+		  end
+			options[:prefs].each {|pref, value| eval("@#{pref} = #{value.inspect}")}
 
 			@required = Array.new
 			@services = Array.new
@@ -289,12 +294,18 @@ module Shipping
 				@response       = @response_plain.include?('<?xml') ? REXML::Document.new(@response_plain) : @response_plain
 
 				@response.instance_variable_set "@response_plain", @response_plain
-				
-        unless @logger.blank?
+        
+        # if we're in debug mode, spit out the XML
+        # we can use the console or the logger
+        if @debug == 'console'
+          puts "[SHIPPING] Request:\n#{@data}"
+          puts "[SHIPPING] Response:\n#{@response}"
+        elsif @debug == 'logger' and !@logger.blank?
           request_id = Time.now.strftime "%FT%T"
-          @logger.info  "#{request_id} SHIPPING Request #{uri}\n\n#{@data}" 
-          @logger.info  "#{request_id} SHIPPING Response\n\n#{@response_plain}"
+          @logger.info  "#{request_id} [SHIPPING] Request #{uri}\n\n#{@data}" 
+          @logger.info  "#{request_id} [SHIPPING] Response\n\n#{@response_plain}"
         end
+        
         def @response.plain; @response_plain; end
 			end
 

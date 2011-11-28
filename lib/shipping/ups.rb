@@ -101,7 +101,6 @@ module Shipping
       }
 
       get_response @ups_url + @ups_tool
-
       return REXML::XPath.first(@response, "//RatingServiceSelectionResponse/RatedShipment/TransportationCharges/MonetaryValue").text.to_f
     rescue
       raise ShippingError, get_error
@@ -386,6 +385,9 @@ module Shipping
       @ups_url ||= "https://wwwcie.ups.com/ups.app/xml"
       @ups_tool = '/AV'
       
+      @country ||= 'US'
+      @sender_country ||= 'US'
+      
       state = nil
       if @state:
         state = STATES.has_value?(@state.downcase) ? STATES.index(@state.downcase) : @state
@@ -433,6 +435,9 @@ module Shipping
       @ups_url ||= "https://wwwcie.ups.com/ups.app/xml"
       @ups_tool = '/ShipConfirm'
       
+      @country ||= 'US'
+      @sender_country ||= 'US'
+      
       @packages ||= []
       if @packages.blank?
         @packages << { :description => @package_description, 
@@ -452,7 +457,7 @@ module Shipping
       
       state = nil unless COUNTRIES_REQUIRING_PROVINCE.include?(@country)
       sender_state = nil unless COUNTRIES_REQUIRING_PROVINCE.include?(@sender_country)
-
+  
       # make ConfirmRequest and get Confirm Response
       b = request_access
       b.instruct!
