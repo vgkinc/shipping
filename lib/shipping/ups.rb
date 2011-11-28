@@ -9,6 +9,7 @@ module Shipping
   class UPS < Base
     include REXML
     API_VERSION = "1.0001"
+    COUNTRIES_REQUIRING_PROVINCE = ["US", "CA", "IE"]
 
     # For current implementation (XML) docs, see http://www.ups.com/gec/techdocs/pdf/dtk_RateXML_V1.zip
     def price
@@ -23,6 +24,9 @@ module Shipping
 
       state = STATES.has_value?(@state.downcase) ? STATES.index(@state.downcase).upcase : @state.upcase unless @state.blank?
       sender_state = STATES.has_value?(@sender_state.downcase) ? STATES.index(@sender_state.downcase).upcase : @sender_state.upcase unless @sender_state.blank?
+
+      state = nil unless COUNTRIES_REQUIRING_PROVINCE.include?(@country)
+      sender_state = nil unless COUNTRIES_REQUIRING_PROVINCE.include?(@sender_country)
 
       # With UPS need to send two xmls
       # First one to authenticate, second for the request
@@ -116,6 +120,9 @@ module Shipping
 
       state = STATES.has_value?(@state.downcase) ? STATES.index(@state.downcase).upcase : @state.upcase unless @state.blank?
       sender_state = STATES.has_value?(@sender_state.downcase) ? STATES.index(@sender_state.downcase).upcase : @sender_state.upcase unless @sender_state.blank?
+
+      state = nil unless COUNTRIES_REQUIRING_PROVINCE.include?(@country)
+      sender_state = nil unless COUNTRIES_REQUIRING_PROVINCE.include?(@sender_country)
 
       # With UPS need to send two xmls
       # First one to authenticate, second for the request
@@ -278,6 +285,9 @@ module Shipping
       state = STATES.has_value?(@state.downcase) ? STATES.index(@state.downcase).upcase : @state.upcase unless @state.blank?
       sender_state = STATES.has_value?(@sender_state.downcase) ? STATES.index(@sender_state.downcase).upcase : @sender_state.upcase unless @sender_state.blank?
 
+      state = nil unless COUNTRIES_REQUIRING_PROVINCE.include?(@country)
+      sender_state = nil unless COUNTRIES_REQUIRING_PROVINCE.include?(@sender_country)
+
       # With UPS need to send two xmls
       # First one to authenticate, second for the request
       b = request_access
@@ -381,6 +391,9 @@ module Shipping
         state = STATES.has_value?(@state.downcase) ? STATES.index(@state.downcase) : @state
       end
       
+      state = nil unless COUNTRIES_REQUIRING_PROVINCE.include?(@country)
+      sender_state = nil unless COUNTRIES_REQUIRING_PROVINCE.include?(@sender_country)
+
       b = request_access
       b.instruct!
       
@@ -416,12 +429,30 @@ module Shipping
       @required = [:ups_license_number, :ups_shipper_number, :ups_user, :ups_password]
       @required +=  [:phone, :email, :company, :address, :city, :state, :zip]
       @required += [:sender_phone, :sender_email, :sender_company, :sender_address, :sender_city, :sender_state, :sender_zip ]
+
       @ups_url ||= "https://wwwcie.ups.com/ups.app/xml"
       @ups_tool = '/ShipConfirm'
       
+      @packages ||= []
+      if @packages.blank?
+        @packages << { :description => @package_description, 
+          :type => @packaging_type, 
+          :weight => { :weight => @weight, :units => @weight_units},
+          :measure => {
+            :units => @measure_units, 
+            :length => @measure_length,
+            :width => @measure_width,
+            :height =>  @measure_height },
+          :insurance => {:currency => @currency_code, :value => @insured_value }
+          }
+      end
+
       state = STATES.has_value?(@state.downcase) ? STATES.index(@state.downcase).upcase : @state.upcase unless @state.blank?
       sender_state = STATES.has_value?(@sender_state.downcase) ? STATES.index(@sender_state.downcase).upcase : @sender_state.upcase unless @sender_state.blank?
       
+      state = nil unless COUNTRIES_REQUIRING_PROVINCE.include?(@country)
+      sender_state = nil unless COUNTRIES_REQUIRING_PROVINCE.include?(@sender_country)
+
       # make ConfirmRequest and get Confirm Response
       b = request_access
       b.instruct!
@@ -431,26 +462,38 @@ module Shipping
           b.RequestAction "ShipConfirm"
           b.RequestOption "nonvalidate"
           b.TransactionReference { |b|
-            b.CustomerContext "#{@city}, #{state} #{@zip}"
+            b.CustomerContext "#{@city}, #{@state} #{@zip}"
             b.XpciVersion API_VERSION
           }
         }
         b.Shipment { |b|
+          unless @return_service_code.nil?
+            b.ReturnService { |b|
+              b.Code @return_service_code
+            }
+          end
           b.Shipper { |b|
             b.ShipperNumber @ups_shipper_number
             b.Name @sender_name
             b.Address { |b|
-              b.AddressLine1 @sender_address unless @sender_address.blank?
+              address_splits = split_address @sender_address
+              b.AddressLine1 address_splits[0] unless address_splits[0].blank?
+              b.AddressLine2 address_splits[1] unless address_splits[1].blank?
+              b.AddressLine3 address_splits[2] unless address_splits[2].blank?
               b.PostalCode @sender_zip
+              b.PhoneNumber @sender_phone
               b.CountryCode @sender_country unless @sender_country.blank?
               b.City @sender_city unless @sender_city.blank?
               b.StateProvinceCode sender_state unless sender_state.blank?
             }
           }
           b.ShipFrom { |b|
-            b.CompanyName @sender_company
+            b.CompanyName @sender_company[0,35]
             b.Address { |b|
-              b.AddressLine1 @sender_address unless @sender_address.blank?
+              address_splits = split_address @sender_address
+              b.AddressLine1 address_splits[0] unless address_splits[0].blank?
+              b.AddressLine2 address_splits[1] unless address_splits[1].blank?
+              b.AddressLine3 address_splits[2] unless address_splits[2].blank?
               b.PostalCode @sender_zip
               b.CountryCode @sender_country unless @sender_country.blank?
               b.City @sender_city unless @sender_city.blank?
@@ -459,8 +502,12 @@ module Shipping
           }
           b.ShipTo { |b|
             b.CompanyName @company
-            b.Address { |b|
-              b.AddressLine1 @address unless @address.blank?
+            b.PhoneNumber @phone
+            b.Address { |b|              
+              address_splits = split_address @address
+              b.AddressLine1 address_splits[0] unless address_splits[0].blank?
+              b.AddressLine2 address_splits[1] unless address_splits[1].blank?
+              b.AddressLine3 address_splits[2] unless address_splits[2].blank?
               b.PostalCode @zip
               b.CountryCode @country unless @country.blank?
               b.City @city unless @city.blank?
@@ -504,32 +551,37 @@ module Shipping
           b.Service { |b| # The service code
             b.Code ServiceTypes[@service_type] || '03' # defaults to ground
           }
-          b.Package { |b| # Package Details         
-            b.PackagingType { |b|
-              b.Code PackageTypes[@packaging_type] || '02' # defaults to 'your packaging'
-              b.Description 'Package'
+          @packages.each do |package|
+            b.Package { |b| # Package Details         
+              unless @return_service_code.nil?
+                b.Description package[:description]
+              end
+              b.PackagingType { |b|
+                b.Code PackageTypes[package[:type]] || '02' # defaults to 'your packaging'
+                b.Description 'Package'
+              }
+              b.PackageWeight { |b|
+                b.Weight package[:weight][:weight]
+                b.UnitOfMeasurement { |b|
+                  b.Code package[:weight][:units] || 'LBS' # or KGS
+                }
+              }
+              b.Dimensions { |b|
+                b.UnitOfMeasurement { |b|
+                  b.Code package[:measure][:units] || 'IN'
+                }
+                b.Length  package[:measure][:length] || 0
+                b.Width  package[:measure][:width] || 0
+                b.Height  package[:measure][:height] || 0
+              } if  package[:measure] && (package[:measure][:length] ||  package[:measure][:width] || package[:measure][:height])
+              b.PackageServiceOptions { |b|
+                b.InsuredValue { |b|
+                  b.CurrencyCode package[:insurance][:currency] || 'US'
+                  b.MonetaryValue package[:insurance][:value]
+                }
+              } if package[:insurance] && package[:insurance][:value]
             }
-            b.PackageWeight { |b|
-              b.Weight @weight
-              b.UnitOfMeasurement { |b|
-                b.Code @weight_units || 'LBS' # or KGS
-              }
-            }
-            b.Dimensions { |b|
-              b.UnitOfMeasurement { |b|
-                b.Code @measure_units || 'IN'
-              }
-              b.Length @measure_length || 0
-              b.Width @measure_width || 0
-              b.Height @measure_height || 0
-            } if @measure_length || @measure_width || @measure_height
-            b.PackageServiceOptions { |b|
-              b.InsuredValue { |b|
-                b.CurrencyCode @currency_code || 'US'
-                b.MonetaryValue @insured_value
-              }
-            } if @insured_value
-          }
+          end
         }
         b.LabelSpecification { |b|
           image_type = @image_type || 'GIF' # default to GIF
@@ -583,11 +635,16 @@ module Shipping
       
       begin  
         response = Hash.new       
-        response[:tracking_number] = REXML::XPath.first(@response, "//ShipmentAcceptResponse/ShipmentResults/PackageResults/TrackingNumber").text
-        response[:encoded_image] = REXML::XPath.first(@response, "//ShipmentAcceptResponse/ShipmentResults/PackageResults/LabelImage/GraphicImage").text
-        response[:image] = Tempfile.new("shipping_label")
-        response[:image].write Base64.decode64( response[:encoded_image] )
-        response[:image].rewind
+
+        response[:packages] = []
+        REXML::XPath.each(@response, "//ShipmentAcceptResponse/ShipmentResults/PackageResults") do |package_element|
+          response[:packages] << {}
+          response[:packages].last[:tracking_number] = REXML::XPath.first(package_element, "TrackingNumber").text
+          response[:packages].last[:encoded_label] = REXML::XPath.first(package_element, "LabelImage/GraphicImage").text
+          response[:packages].last[:label_file] = Tempfile.new("shipping_label_#{Time.now}_#{Time.now.usec}")
+          response[:packages].last[:label_file].write Base64.decode64( response[:packages].last[:encoded_label] )
+          response[:packages].last[:label_file].rewind
+        end
       rescue
         raise ShippingError, get_error
       end
@@ -711,7 +768,87 @@ module Shipping
       end
     end
 
+    # For current implementation (XML) docs, see http://www.ups.com/gec/techdocs/pdf/dtk_TrackXML_V1.zip
+    # Activity parameter is the value of RequestOption Element. 0 retrieves just the last activity, 1 retrieves all the activities.
+    # Additional values are explained in the XML WebService documentation
+    # You must send the requests to the production environment (https://onlinetools.ups.com/ups.app/xml) if you need signature images
+    def track tracking_number, activity=1
+      @ups_url ||= "https://wwwcie.ups.com/ups.app/xml"
+      @ups_tool = '/Track'
+
+      # With UPS need to send two xmls
+      # First one to authenticate, second for the request
+      b = request_access
+      b.instruct!
+
+      b.TrackRequest { |b| 
+        b.Request { |b|
+          b.RequestAction 'Track'
+          b.TransactionReference { |b|
+            b.ToolVersion API_VERSION
+          }
+          b.RequestOption activity
+        }
+        b.TrackingNumber tracking_number
+      }
+
+      get_response @ups_url + @ups_tool
+      
+      status = XPath.first(@response, "//TrackResponse/Response/ResponseStatusCode").text.to_i
+      raise ShippingError, get_error if status == 0
+          
+      tracking_info = {:activities => []}
+
+      XPath.each(@response, "//TrackResponse/Shipment/Package/Activity") do |activity|
+
+        tracking_info[:activities] << {}
+        tracking_info[:activities].last[:location] = {}
+        tracking_info[:activities].last[:location][:address] = {}
+        {:address_line1 => "AddressLine1", :address_line2 => "AddressLine2", :address_line3 => "AddressLine3", :city => "City", :state_province_code => "StateProvinceCode", :postal_code => "PostalCode", :country_code => "CountryCode"}.each do |hash_key, xml_element|
+          tracking_info[:activities].last[:location][:address][hash_key] = activity.get_elements("ActivityLocation/Address/#{xml_element}").first.text unless activity.get_elements("ActivityLocation/Address/#{xml_element}").first.blank?
+        end
+
+        tracking_info[:activities].last[:signed_by] = activity.get_elements("ActivityLocation/SignedForByName").first.text unless  activity.get_elements("ActivityLocation/SignedForByName").first.blank?
+        unless activity.get_elements("ActivityLocation/SignatureImage[ImageFormat/Code = 'GIF']/GraphicImage").blank?
+          tracking_info[:activities].last[:signature] = Tempfile.new("signature_#{tracking_number}_#{tracking_info[:activities].length}")
+          tracking_info[:activities].last[:signature].write  Base64.decode64(activity.get_elements("ActivityLocation/SignatureImage[ImageFormat/Code = 'GIF']/GraphicImage").first.text) 
+          tracking_info[:activities].last[:signature].rewind
+        end
+
+        tracking_info[:activities].last[:status] = activity.get_elements("Status/StatusType/Code").first.text unless activity.get_elements("Status/StatusType/Code").first.blank?
+        tracking_info[:activities].last[:description] = activity.get_elements("Status/StatusType/Description").first.text unless activity.get_elements("Status/StatusType/Description").first.blank?
+        tracking_info[:activities].last[:code] = activity.get_elements("Status/StatusCode/Code").first.text unless activity.get_elements("Status/StatusCode/Code").first.blank?
+        tracking_info[:activities].last[:date] = "#{activity.get_elements("Date").first.text} #{activity.get_elements("Time").first.text}".strip
+
+      end
+
+      current_status = XPath.first(@response, "/TrackResponse/Shipment/CurrentStatus/Code")
+      unless current_status.blank?
+        tracking_info[:current_status] = current_status.text
+      end
+
+      delivery_date = XPath.first(@response, "/TrackResponse/Shipment/EstimatedDeliveryDetails/Date")
+      unless delivery_date.blank?
+        tracking_info[:delivery_date] = "#{delivery_date.text}}".strip
+      end
+
+      tracking_info
+
+    end
+
     private
+
+    def split_address address
+      return [] if address.blank?
+      address.split.inject([]) do |splits, w| 
+        if splits.blank? or ((splits.last.length + w.length + 1) >= 35 )
+          splits << w.slice(0,35); 
+        else 
+          splits.last << " #{w}" 
+        end
+        splits
+      end
+    end
 
     def request_access
       @data = String.new

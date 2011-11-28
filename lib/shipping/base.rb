@@ -5,6 +5,8 @@
 # Updated:: 12-22-2008 by Mark Dickson (mailto:mark@sitesteaders.com)
 
 module Shipping
+	VERSION = "1.6.0"
+
 	class ShippingError < StandardError; end
 	class ShippingRequiredFieldError < StandardError; end
 
@@ -28,7 +30,7 @@ module Shipping
     attr_accessor :weight_each, :quantity, :max_weight, :max_quantity, :items
 
 		def initialize(options = {})
-			prefs = File.expand_path(options[:prefs] || RAILS_ROOT + "/config/shipping.yml")
+			prefs = File.expand_path(options[:prefs] || "~/.shipping.yml")
 			YAML.load(File.open(prefs)).each {|pref, value| eval("@#{pref} = #{value.inspect}")} if File.exists?(prefs)
 
 			@required = Array.new
@@ -287,7 +289,13 @@ module Shipping
 				@response       = @response_plain.include?('<?xml') ? REXML::Document.new(@response_plain) : @response_plain
 
 				@response.instance_variable_set "@response_plain", @response_plain
-				def @response.plain; @response_plain; end
+				
+        unless @logger.blank?
+          request_id = Time.now.strftime "%FT%T"
+          @logger.info  "#{request_id} SHIPPING Request #{uri}\n\n#{@data}" 
+          @logger.info  "#{request_id} SHIPPING Response\n\n#{@response_plain}"
+        end
+        def @response.plain; @response_plain; end
 			end
 
 			# Make sure that the required fields are not empty
