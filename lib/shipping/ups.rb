@@ -652,6 +652,16 @@ module Shipping
           response[:image] = Tempfile.new(["shipping_label", '.' + extension.downcase])
           response[:image].write Base64.decode64( response[:encoded_image] )
           response[:image].rewind
+          
+          # if this package has a high insured value
+          high_value_report = REXML::XPath.first(@response, "//ShipmentAcceptResponse/ShipmentResults/ControlLogReceipt/GraphicImage")
+          if high_value_report
+            extension = REXML::XPath.first(@response, "//ShipmentAcceptResponse/ShipmentResults/ControlLogReceipt/ImageFormat/Code").text
+            response[:encoded_high_value_report] = high_value_report.text
+            response[:high_value_report] = Tempfile.new(["high_value_report", '.' + extension.downcase])
+            response[:high_value_report].write Base64.decode64( response[:encoded_high_value_report] )
+            response[:high_value_report].rewind
+          end
         else
           response[:packages] = []
           REXML::XPath.each(@response, "//ShipmentAcceptResponse/ShipmentResults/PackageResults") do |package_element|
@@ -662,6 +672,16 @@ module Shipping
             response[:packages].last[:label_file] = Tempfile.new(["shipping_label_#{Time.now}_#{Time.now.usec}", '.' + extension.downcase])
             response[:packages].last[:label_file].write Base64.decode64( response[:packages].last[:encoded_label] )
             response[:packages].last[:label_file].rewind
+            
+            # if this package has a high insured value
+            high_value_report = REXML::XPath.first(package_element, "//ShipmentAcceptResponse/ShipmentResults/ControlLogReceipt/GraphicImage")
+            if high_value_report
+              extension = REXML::XPath.first(package_element, "//ShipmentAcceptResponse/ShipmentResults/ControlLogReceipt/ImageFormat/Code").text
+              response[:packages].last[:encoded_high_value_report] = high_value_report.text
+              response[:packages].last[:high_value_report] = Tempfile.new(["high_value_report", '.' + extension.downcase])
+              response[:packages].last[:high_value_report].write Base64.decode64( response[:packages].last[:encoded_high_value_report] )
+              response[:packages].last[:high_value_report].rewind
+            end
           end
         end
       rescue
@@ -677,7 +697,10 @@ module Shipping
       response.freeze
     end
     
-    def void(tracking_number)
+    # This voids a shipment
+    # if multiple tracking numbers are passed in, it will attempt to void them all in a single call
+    # if ANY of them fails, we return false and hand over the array of results
+    def void(shipping_id, tracking_numbers = [])
       @required = [:ups_license_number, :ups_shipper_number, :ups_user, :ups_password]
       @ups_url ||= "https://wwwcie.ups.com/ups.app/xml"
       @ups_tool = '/Void'
@@ -694,14 +717,42 @@ module Shipping
             b.XpciVersion API_VERSION
           }
         }
-        b.ShipmentIdentificationNumber tracking_number
+        # one shipment may have multiple packages
+        if tracking_numbers.length > 1
+          b.ExpandedVoidShipment { |b|
+            b.ShipmentIdentificationNumber shipping_id
+            for num in tracking_numbers
+              b.TrackingNumber num
+            end
+          }
+        else
+          b.ShipmentIdentificationNumber shipping_id
+        end
       }
       
       # get VoidResponse
       get_response @ups_url + @ups_tool
-      status = REXML::XPath.first(@response, '//VoidShipmentResponse/Response/ResponseStatusCode').text
-      raise ShippingError, get_error if status == '0'
-      return true if status == '1'
+      
+      if tracking_numbers.length > 1
+        status = true
+        multiple_response = Hash.new
+        REXML::XPath.each(@response, "//VoidShipmentResponse/PackageLevelResults") do |package_element|
+          tracking_number = REXML::XPath.first(package_element, "TrackingNumber").text
+          response_code = REXML::XPath.first(package_element, "StatusCode/Code").text.to_i
+          multiple_response[tracking_number] = response_code
+          status = false if response_code != 1
+        end
+        if status == true
+          return true
+        else
+          return multiple_response
+        end
+      else
+        status = REXML::XPath.first(@response, '//VoidShipmentResponse/Response/ResponseStatusCode').text
+        # TODO: we may need a more detailed error message in the event that one package is voided and the other isn't
+        raise ShippingError, get_error if status == '0' or status == '2'
+        return true if status == '1'
+      end
     end
     
     # For current implementation (XML) docs, see http://www.ups.com/gec/techdocs/pdf/dtk_TimeNTransitXML_V1.zip
