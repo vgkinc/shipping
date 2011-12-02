@@ -5,11 +5,11 @@
 
 Gem::Specification.new do |s|
   s.name = %q{shipping}
-  s.version = "1.7.0"
+  s.version = "1.8.0"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Lucas Carlson", "Jimmy Baker", "Mark Dickson", "David J. Brenes"]
-  s.date = %q{2011-11-28}
+  s.date = %q{2011-12-02}
   s.description = %q{A general shipping module to find out the shipping prices via UPS or FedEx}
   s.email = %q{mark@sitesteaders.com}
   s.extra_rdoc_files = [
