@@ -508,6 +508,7 @@ module Shipping
           b.ShipTo { |b|
             b.CompanyName @company
             b.PhoneNumber @phone
+            b.AttentionName @attention unless @attention.blank?
             b.Address { |b|              
               b.AddressLine1 @address unless @address.blank?
               b.AddressLine2 @address2 unless @address2.blank?
