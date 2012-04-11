@@ -5,7 +5,7 @@
 # Updated:: 11-28-2011 by Mark Dickson (mailto:mark@sitesteaders.com)
 
 module Shipping
-	VERSION = "1.7.0"
+	VERSION = "1.9.0"
 
 	class ShippingError < StandardError; end
 	class ShippingRequiredFieldError < StandardError; end
