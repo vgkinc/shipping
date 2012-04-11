@@ -95,21 +95,9 @@ module Shipping
                 b.CurrencyCode @currency_code || 'US'
                 b.MonetaryValue @insured_value
               }
-            }
-            b.PackageServiceOptions { |b|
-              b.InsuredValue { |b|
-                b.CurrencyCode @currency_code || 'US'
-                b.MonetaryValue @insured_value
-              }
               b.DeliveryConfirmation { |b|
-                b.DCISType '1'
-              } if @delivery_confirmation == true
-              b.DeliveryConfirmation { |b|
-                b.DCISType '2'
-              } if @signature_required == true
-              b.DeliveryConfirmation { |b|
-                b.DCISType '3'
-              } if @adult_signature_required == true
+                b.DCISType delivery_confirmation
+              } if delivery_confirmation
             } 
           }
         }
@@ -207,14 +195,8 @@ module Shipping
                 b.MonetaryValue @insured_value
               }
               b.DeliveryConfirmation { |b|
-                b.DCISType '1'
-              } if @delivery_confirmation == true
-              b.DeliveryConfirmation { |b|
-                b.DCISType '2'
-              } if @signature_required == true
-              b.DeliveryConfirmation { |b|
-                b.DCISType '3'
-              } if @adult_signature_required == true
+                b.DCISType delivery_confirmation
+              } if delivery_confirmation
             }
           }
         }
@@ -379,14 +361,8 @@ module Shipping
                 b.MonetaryValue @insured_value
               }
               b.DeliveryConfirmation { |b|
-                b.DCISType '1'
-              } if @delivery_confirmation == true
-              b.DeliveryConfirmation { |b|
-                b.DCISType '2'
-              } if @signature_required == true
-              b.DeliveryConfirmation { |b|
-                b.DCISType '3'
-              } if @adult_signature_required == true
+                b.DCISType delivery_confirmation
+              } if delivery_confirmation
             }
           }
         }
@@ -477,15 +453,6 @@ module Shipping
       @packages ||= []
       if @packages.blank?
         @single_package = true
-        if @adult_signature_required
-          delivery_confirmation = '1'
-        elsif @signature_required
-          delivery_confirmation = '2'
-        elsif @delivery_confirmation
-          delivery_confirmation = '3'
-        else
-          delivery_confirmation = false
-        end
         @packages << { :description => @package_description, 
           :type => @packaging_type, 
           :weight => { :weight => @weight, :units => @weight_units},
@@ -973,6 +940,18 @@ module Shipping
     end
 
     private
+    
+    def delivery_confirmation  
+      if @adult_signature_required
+        return '1'
+      elsif @signature_required
+        return '2'
+      elsif @delivery_confirmation
+        return '3'
+      else
+        return false
+      end
+    end
 
     def request_access
       @data = String.new
