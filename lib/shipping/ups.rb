@@ -116,7 +116,8 @@ module Shipping
       }
 
       get_response @ups_url + @ups_tool
-      return REXML::XPath.first(@response, "//RatingServiceSelectionResponse/RatedShipment/TransportationCharges/MonetaryValue").text.to_f
+      # NOTE: This was set to TransportationCharges, but that leaves out service costs #MD
+      return REXML::XPath.first(@response, "//RatingServiceSelectionResponse/RatedShipment/TotalCharges/MonetaryValue").text.to_f
     rescue
       raise ShippingError, get_error
     end
@@ -223,7 +224,8 @@ module Shipping
 
       status = XPath.first(@response, "//RatingServiceSelectionResponse/Response/ResponseStatusCode").text.to_i
       if status == 1
-        return XPath.first(@response, "//RatingServiceSelectionResponse/RatedShipment/TransportationCharges/MonetaryValue").text.to_f
+        # NOTE: This was set to TransportationCharges, but that leaves out service costs #MD
+        return XPath.first(@response, "//RatingServiceSelectionResponse/RatedShipment/TotalCharges/MonetaryValue").text.to_f
       else
         return XPath.first(@response, "//RatingServiceSelectionResponse/Response/Error/ErrorDescription").text
       end
@@ -397,11 +399,12 @@ module Shipping
         shipmethods = Hash.new
         @response.elements.each('//RatedShipment') do |shipmethod|
           index = XPath.first(shipmethod, "Service/Code").text
+          # NOTE: This was set to TransportationCharges, but that leaves out service costs #MD
           shipmethods[index.to_i] = {
             :service => ServiceTypes.index(index),
             :service_name => ServiceTypes.index(index).split("_").each{|word| word.capitalize!}.join(" "),
-            :price => XPath.first(shipmethod, "TransportationCharges/MonetaryValue").text.to_f,
-            :currency => XPath.first(shipmethod, "TransportationCharges/CurrencyCode").text,
+            :price => XPath.first(shipmethod, "TotalCharges/MonetaryValue").text.to_f,
+            :currency => XPath.first(shipmethod, "TotalCharges/CurrencyCode").text,
             :billing_weight => XPath.first(shipmethod, "BillingWeight/Weight").text.to_f,
             :weight_units => XPath.first(shipmethod, "BillingWeight/UnitOfMeasurement/Code").text,
             }
@@ -474,6 +477,15 @@ module Shipping
       @packages ||= []
       if @packages.blank?
         @single_package = true
+        if @adult_signature_required
+          delivery_confirmation = '1'
+        elsif @signature_required
+          delivery_confirmation = '2'
+        elsif @delivery_confirmation
+          delivery_confirmation = '3'
+        else
+          delivery_confirmation = false
+        end
         @packages << { :description => @package_description, 
           :type => @packaging_type, 
           :weight => { :weight => @weight, :units => @weight_units},
@@ -482,7 +494,8 @@ module Shipping
             :length => @measure_length,
             :width => @measure_width,
             :height =>  @measure_height },
-          :insurance => {:currency => @currency_code, :value => @insured_value }
+          :insurance => {:currency => @currency_code, :value => @insured_value },
+          :delivery_confirmation => delivery_confirmation
           }
       end
 
@@ -624,15 +637,9 @@ module Shipping
                   b.MonetaryValue package[:insurance][:value]
                 } if package[:insurance] && package[:insurance][:value]
                 b.DeliveryConfirmation { |b|
-                  b.DCISType '1'
-                } if @delivery_confirmation == true
-                b.DeliveryConfirmation { |b|
-                  b.DCISType '2'
-                } if @signature_required == true
-                b.DeliveryConfirmation { |b|
-                  b.DCISType '3'
-                } if @adult_signature_required == true
-              } if (package[:insurance] && package[:insurance][:value]) or @delivery_confirmation or @signature_required or @adult_signature_required
+                  b.DCISType package[:delivery_confirmation]
+                } if package[:delivery_confirmation]
+              } if (package[:insurance] && package[:insurance][:value]) or package[:delivery_confirmation]
             }
           end
         }
