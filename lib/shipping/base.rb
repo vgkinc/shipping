@@ -23,6 +23,7 @@ module Shipping
 		attr_accessor :weight, :weight_units, :insured_value, :declared_value, :transaction_type, :description
 		attr_accessor :measure_units, :measure_length, :measure_width, :measure_height
 		attr_accessor :package_total, :packaging_type, :service_type
+		attr_accessor :delivery_confirmation, :signature_required, :adult_signature_required
 		
 		attr_accessor :price, :discount_price, :eta, :time_in_transit
 

@@ -2,7 +2,7 @@
 # Copyright:: Copyright (c) 2005 Lucas Carlson
 # License::   LGPL
 
-# Updated:: 12-22-2008 by Mark Dickson (mailto:mark@sitesteaders.com)
+# Updated:: 4-12-2012 by Mark Dickson (mailto:mark@sitesteaders.com)
 
 module Shipping
   
@@ -96,6 +96,21 @@ module Shipping
                 b.MonetaryValue @insured_value
               }
             }
+            b.PackageServiceOptions { |b|
+              b.InsuredValue { |b|
+                b.CurrencyCode @currency_code || 'US'
+                b.MonetaryValue @insured_value
+              }
+              b.DeliveryConfirmation { |b|
+                b.DCISType '1'
+              } if @delivery_confirmation == true
+              b.DeliveryConfirmation { |b|
+                b.DCISType '2'
+              } if @signature_required == true
+              b.DeliveryConfirmation { |b|
+                b.DCISType '3'
+              } if @adult_signature_required == true
+            } 
           }
         }
       }
@@ -190,6 +205,15 @@ module Shipping
                 b.CurrencyCode @currency_code || 'US'
                 b.MonetaryValue @insured_value
               }
+              b.DeliveryConfirmation { |b|
+                b.DCISType '1'
+              } if @delivery_confirmation == true
+              b.DeliveryConfirmation { |b|
+                b.DCISType '2'
+              } if @signature_required == true
+              b.DeliveryConfirmation { |b|
+                b.DCISType '3'
+              } if @adult_signature_required == true
             }
           }
         }
@@ -352,6 +376,15 @@ module Shipping
                 b.CurrencyCode @currency_code || 'US'
                 b.MonetaryValue @insured_value
               }
+              b.DeliveryConfirmation { |b|
+                b.DCISType '1'
+              } if @delivery_confirmation == true
+              b.DeliveryConfirmation { |b|
+                b.DCISType '2'
+              } if @signature_required == true
+              b.DeliveryConfirmation { |b|
+                b.DCISType '3'
+              } if @adult_signature_required == true
             }
           }
         }
@@ -589,8 +622,17 @@ module Shipping
                 b.InsuredValue { |b|
                   b.CurrencyCode package[:insurance][:currency] || 'US'
                   b.MonetaryValue package[:insurance][:value]
-                }
-              } if package[:insurance] && package[:insurance][:value]
+                } if package[:insurance] && package[:insurance][:value]
+                b.DeliveryConfirmation { |b|
+                  b.DCISType '1'
+                } if @delivery_confirmation == true
+                b.DeliveryConfirmation { |b|
+                  b.DCISType '2'
+                } if @signature_required == true
+                b.DeliveryConfirmation { |b|
+                  b.DCISType '3'
+                } if @adult_signature_required == true
+              } if (package[:insurance] && package[:insurance][:value]) or @delivery_confirmation or @signature_required or @adult_signature_required
             }
           end
         }
