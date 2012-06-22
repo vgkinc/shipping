@@ -594,7 +594,7 @@ module Shipping
                 b.Width  package[:measure][:width] || 0
                 b.Height  package[:measure][:height] || 0
               } if  package[:measure] && (package[:measure][:length] ||  package[:measure][:width] || package[:measure][:height])
-              unless @reference_number.blank?
+              unless @reference_number.blank? or %w[worldwide_expedited worldwide_express worldwide_express_plus].include? ServiceTypes[@service_type]
                 b.ReferenceNumber {|b|
                   b.Code '02'
                   b.Value @reference_number
