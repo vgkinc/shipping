@@ -491,10 +491,12 @@ module Shipping
               b.Code @return_service_code
             }
           end
+          b.Description @description unless @description.blank?
           b.Shipper { |b|
             b.ShipperNumber @ups_shipper_number
             b.Name @sender_name
             b.AttentionName @sender_attention unless @sender_attention.blank?
+            b.PhoneNumber @sender_phone unless @sender_phone.blank?
             b.Address { |b|
               b.AddressLine1 @sender_address unless @sender_address.blank?
               b.AddressLine2 @sender_address2 unless @sender_address2.blank?
