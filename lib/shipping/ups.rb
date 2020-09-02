@@ -377,8 +377,8 @@ module Shipping
           index = XPath.first(shipmethod, "Service/Code").text
           # NOTE: This was set to TransportationCharges, but that leaves out service costs #MD
           shipmethods[index.to_i] = {
-            :service => ServiceTypes.index(index),
-            :service_name => ServiceTypes.index(index).split("_").each{|word| word.capitalize!}.join(" "),
+            :service => ServiceTypes.key(index),
+            :service_name => ServiceTypes.key(index).split("_").each{|word| word.capitalize!}.join(" "),
             :price => XPath.first(shipmethod, "TotalCharges/MonetaryValue").text.to_f,
             :currency => XPath.first(shipmethod, "TotalCharges/CurrencyCode").text,
             :billing_weight => XPath.first(shipmethod, "BillingWeight/Weight").text.to_f,
