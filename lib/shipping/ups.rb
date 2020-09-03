@@ -785,8 +785,8 @@ module Shipping
       @ups_url ||= "https://wwwcie.ups.com/ups.app/xml"
       @ups_tool = '/TimeInTransit'
 
-      state = STATES.has_value?(@state.downcase) ? STATES.index(@state.downcase).upcase : @state.upcase unless @state.blank?
-      sender_state = STATES.has_value?(@sender_state.downcase) ? STATES.index(@sender_state.downcase).upcase : @sender_state.upcase unless @sender_state.blank?
+      state = STATES.has_value?(@state.downcase) ? STATES.key(@state.downcase).upcase : @state.upcase unless @state.blank?
+      sender_state = STATES.has_value?(@sender_state.downcase) ? STATES.key(@sender_state.downcase).upcase : @sender_state.upcase unless @sender_state.blank?
 
       # With UPS need to send two xmls
       # First one to authenticate, second for the request
@@ -845,7 +845,7 @@ module Shipping
           index = XPath.first(shipmethod, "Service/Code").text
           times[index] = {
             :service_name => XPath.first(shipmethod, "Service/Description").text,
-            :service => ServiceTimes.index(index),
+            :service => ServiceTimes.key(index),
             :days => XPath.first(shipmethod, "EstimatedArrival/BusinessTransitDays").text.to_i,
             :date => XPath.first(shipmethod, "EstimatedArrival/Date").text.to_date,
             :time => XPath.first(shipmethod, "EstimatedArrival/Time").text,
